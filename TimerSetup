@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pitcher Entry Timer</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f0f0f0; }
+    .container { padding: 20px; max-width: 480px; margin: auto; background: #fff; min-height: 100vh; box-sizing: border-box; }
+    h1, h2 { text-align: center; }
+    .section { display: none; margin-top: 20px; }
+    .visible { display: block; }
+    input, select, button { margin: 10px 0; padding: 12px; width: 100%; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 14px; }
+    th { background-color: #007bff; color: white; }
+    ul { padding-left: 0; list-style-type: none; }
+    li { margin-bottom: 12px; font-size: 14px; }
+    .edit-btn { background-color: #28a745; margin-top: 5px; }
+    .edit-btn:hover { background-color: #1e7e34; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Pitcher Entry Timer</h1>
+
+  <!-- Menu -->
+  <div id="menu" class="section visible">
+    <button onclick="showSection('pitcher-form')">Pitch Entry</button>
+    <button onclick="showSection('sessions')">Sessions</button>
+    <button onclick="showSection('database')">Database</button>
+  </div>
+
+  <!-- Pitch Entry -->
+  <div id="pitcher-form" class="section">
+    <h2 id="form-title">Enter Pitcher Details</h2>
+    <input type="text" id="name" placeholder="Full Name" required />
+    <input type="number" id="age" placeholder="Age" required />
+    <input type="text" id="height" placeholder="Height (e.g., 6'1\")" required />
+    <input type="number" id="weight" placeholder="Weight (lbs)" required />
+    <button id="save-btn" onclick="startLogging()">Start Logging</button>
+    <button onclick="showSection('menu')">Back to Menu</button>
+  </div>
+
+  <!-- Log Section -->
+  <div id="log-section" class="section">
+    <h2>Log Pitches</h2>
+    <button onclick="logTime()">Log Time</button>
+    <p id="last-time" style="text-align:center; font-weight:bold;"></p>
+    <select id="pitch-type">
+      <option value="">Select Pitch Type</option>
+      <option>Fastball</option>
+      <option>Two-Seam Fastball</option>
+      <option>Four-Seam Fastball</option>
+      <option>Cutter</option>
+      <option>Slider</option>
+      <option>Curveball</option>
+      <option>Knuckle Curve</option>
+      <option>Splitter</option>
+      <option>Sinker</option>
+      <option>Changeup</option>
+      <option>Knuckleball</option>
+      <option>Forkball</option>
+      <option>Eephus</option>
+    </select>
+    <input type="number" id="velo" placeholder="Velocity (mph)" />
+    <button onclick="logPitch()">Log Pitch</button>
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Pitch Type</th><th>Velocity</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="log-table"></tbody>
+    </table>
+    <a id="download-link" style="display:none;"></a>
+    <button onclick="endSession()">Finish Session</button>
+    <button onclick="showSection('menu')">Back to Menu</button>
+  </div>
+
+  <!-- Sessions -->
+  <div id="sessions" class="section">
+    <h2>Sessions</h2>
+    <ul id="sessions-list"></ul>
+    <button onclick="showSection('menu')">Back to Menu</button>
+  </div>
+
+  <!-- Database -->
+  <div id="database" class="section">
+    <h2>Pitchers Database</h2>
+    <ul id="database-list"></ul>
+    <button onclick="showSection('menu')">Back to Menu</button>
+  </div>
+</div>
+
+<script>
+  let pitcherData = {};
+  let logData = [];
+  let lastTime = '';
+  let isEditing = false;
+  let editName = '';
+
+  let sessions = JSON.parse(localStorage.getItem('sessions')) || [];
+  let database = JSON.parse(localStorage.getItem('database')) || {};
+
+  function saveToLocalStorage() {
+    localStorage.setItem('sessions', JSON.stringify(sessions));
+    localStorage.setItem('database', JSON.stringify(database));
+  }
+
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
+    document.getElementById(id).classList.add('visible');
+    if (id === 'sessions') updateSessionsList();
+    if (id === 'database') updateDatabaseList();
+    if (id === 'pitcher-form') {
+      document.getElementById('form-title').innerText = isEditing ? 'Edit Pitcher Details' : 'Enter Pitcher Details';
+      document.getElementById('save-btn').innerText = isEditing ? 'Save Changes' : 'Start Logging';
+    }
+  }
+
+  function logTime() {
+    const now = new Date();
+    lastTime = now.toLocaleTimeString();
+    document.getElementById('last-time').textContent = `Last Time Logged: ${lastTime}`;
+  }
+
+  function startLogging() {
+    pitcherData = {
+      name: document.getElementById('name').value.trim(),
+      age: document.getElementById('age').value.trim(),
+      height: document.getElementById('height').value.trim(),
+      weight: document.getElementById('weight').value.trim()
+    };
+
+    if (!pitcherData.name || !pitcherData.age || !pitcherData.height || !pitcherData.weight) {
+      alert('Please fill in all pitcher details.');
+      return;
+    }
+
+    if (!database[pitcherData.name]) {
+      database[pitcherData.name] = pitcherData;
+      saveToLocalStorage();
+    }
+
+    showSection('log-section');
+  }
+
+  function endSession() {
+    if (!pitcherData.name || logData.length === 0) {
+      alert('No session data to save.');
+      return;
+    }
+
+    const date = new Date().toLocaleString();
+    sessions.push({ date, pitcher: pitcherData, pitches: [...logData] });
+    saveToLocalStorage();
+
+    let csvContent = `Pitcher Name,${pitcherData.name}\nAge,${pitcherData.age}\nHeight,${pitcherData.height}\nWeight,${pitcherData.weight}\n\n`;
+    csvContent += 'Time,Pitch Type,Velocity\n';
+    logData.forEach(row => {
+      csvContent += `${row.time},${row.type},${row.velo}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.getElementById('download-link');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${pitcherData.name.replace(/\s+/g, '_')}_pitch_log.csv`);
+    link.click();
+    URL.revokeObjectURL(url);
+
+    logData = [];
+    document.getElementById('log-table').innerHTML = '';
+    showSection('menu');
+  }
+
+  function logPitch() {
+    const pitchType = document.getElementById('pitch-type').value;
+    const velo = document.getElementById('velo').value;
+    if (!pitchType || !velo) {
+      alert('Please enter pitch type and velocity.');
+      return;
+    }
+    const time = new Date().toLocaleTimeString();
+    logData.push({ time, type: pitchType, velo });
+    renderLogTable();
+    document.getElementById('pitch-type').value = '';
+    document.getElementById('velo').value = '';
+  }
+
+  function renderLogTable() {
+    const table = document.getElementById('log-table');
+    table.innerHTML = '';
+    logData.forEach((p, i) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td><input value="${p.time}" onchange="updatePitch(${i}, 'time', this.value)" /></td>
+        <td><input value="${p.type}" onchange="updatePitch(${i}, 'type', this.value)" /></td>
+        <td><input value="${p.velo}" onchange="updatePitch(${i}, 'velo', this.value)" /></td>
+        <td><button onclick="removePitch(${i})">Delete</button></td>`;
+      table.appendChild(row);
+    });
+  }
+
+  function updatePitch(index, field, value) {
+    logData[index][field] = value;
+  }
+
+  function removePitch(index) {
+    logData.splice(index, 1);
+    renderLogTable();
+  }
+
+  function updateSessionsList() {
+    const list = document.getElementById('sessions-list');
+    list.innerHTML = sessions.length ? '' : '<li>No sessions yet.</li>';
+    sessions.forEach((s, i) => {
+      const li = document.createElement('li');
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.className = 'edit-btn';
+      editBtn.onclick = () => editSession(i);
+      li.innerHTML = `${i+1}. ${s.date} - ${s.pitcher.name}`;
+      li.appendChild(document.createElement('br'));
+      li.appendChild(editBtn);
+      list.appendChild(li);
+    });
+  }
+
+  function editSession(index) {
+    const session = sessions[index];
+    pitcherData = session.pitcher;
+    logData = session.pitches;
+    sessions.splice(index, 1);
+    showSection('log-section');
+    renderLogTable();
+  }
+
+  function updateDatabaseList() {
+    const list = document.getElementById('database-list');
+    list.innerHTML = '';
+    const pitcherNames = Object.keys(database);
+    if (pitcherNames.length === 0) {
+      list.innerHTML = '<li>No pitchers in database.</li>';
+      return;
+    }
+    pitcherNames.forEach((name, i) => {
+      const li = document.createElement('li');
+      const pitcher = database[name];
+      li.innerHTML = `<strong>${name}</strong><br>Age: ${pitcher.age}, Height: ${pitcher.height}, Weight: ${pitcher.weight}`;
+      list.appendChild(li);
+    });
+  }
+</script>
+</body>
+</html>
